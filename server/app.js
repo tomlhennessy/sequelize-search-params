@@ -31,58 +31,93 @@ app.get('/musicians', async (req, res, next) => {
         query.limit = size;
         query.offset = size * (page - 1);
     }
-    
+
 
     // STEP 1: WHERE clauses on the Musician model
     // ?firstName=XX&lastName=YY
     // Add keys to the WHERE clause to match the firstName param, if it exists.
     // End result: { where: { firstName: req.query.firstName } }
 
-    // Your code here
-    
+    const { firstName, lastName } = req.query;
+
+    if (firstName) {
+        query.where.firstName = firstName;
+    }
+
+    if (lastName) {
+        query.where.lastName = lastName;
+    }
+
     // Add keys to the WHERE clause to match the lastName param, if it exists.
     // End result: { where: { lastName: req.query.lastName } }
-    
+
     // Your code here
 
 
     // STEP 2: WHERE clauses on the associated Band model
     // ?bandName=XX
-    // Add an object to the `include` array to include the Band model where the 
+    // Add an object to the `include` array to include the Band model where the
     // name matches the bandName param, if it exists.
     // End result: { include: [{ model: Band, where: { name: req.query.bandName } }] }
 
-    // Your code here
+    // const { bandName } = req.query;
+
+    // if (bandName) {
+    //     query.include.push({
+    //         model: Band,
+    //         where: { name: bandName }, // filters bands with exact name
+    //         attributes: [] // include no additional fields from band model
+    //     })
+    // }
 
 
-    // STEP 3: WHERE Clauses on the associated Instrument model 
+    // STEP 3: WHERE Clauses on the associated Instrument model
     // ?instrumentTypes[]=XX&instrumentTypes[]=YY
-    // Add an object to the `include` array to include the Instrument model 
-    // where the type matches any value in the instrumentTypes param array, if it 
-    // exists. Do not include any attributes from the join table 
+    // Add an object to the `include` array to include the Instrument model
+    // where the type matches any value in the instrumentTypes param array, if it
+    // exists. Do not include any attributes from the join table
     // MusicianInstruments.
-    // End result: 
-    /* { 
-        include: [{ 
-            model: Instrument, 
-            where: { type: req.query.instrumentTypes }, 
+    // End result:
+    /* {
+        include: [{
+            model: Instrument,
+            where: { type: req.query.instrumentTypes },
             through: { attributes: [] } // Omits the join table attributes
-        }] } 
+        }] }
     */
 
-    // Your code here
+    // const { instrumentTypes } = req.query;
+
+    // if (instrumentTypes) {
+    //     query.include.push({
+    //         model: Instrument,
+    //         where: {
+    //             type: instrumentTypes // matches any of the provided instrument types
+    //         },
+    //         through: {attributes: [] }, // omits attributes from the join table
+    //         attributes: [] // include no additional fields from the instrument model
+    //     })
+    // }
 
 
     // BONUS STEP 4: Specify Musician attributes to be returned
     // ?&musicianFields[]=XX&musicianFields[]=YY
-    // Add a key to the query object that will limit the Musician attributes 
-    // returned to those specified by the query param musicianFields, if it 
+    // Add a key to the query object that will limit the Musician attributes
+    // returned to those specified by the query param musicianFields, if it
     // exists
     // If keyword 'all' is used, do not specify any specific attributes
     // If keyword 'none' is used, do not include any Musician attributes
     // If any other attributes are provided, only include those values
 
-    // Your code here
+    const { musicianFields } = req.query;
+
+    if (musicianFields) {
+        if (musicianFields.includes("none")) {
+            query.attributes = []; // exclude all musician attributes
+        } else if (!musicianFields.includes("all")) {
+            query.attributes = musicianFields; // include only specified musician attributes
+        }
+    }
 
 
     // BONUS STEP 5: Specify attributes to be returned
@@ -94,32 +129,60 @@ app.get('/musicians', async (req, res, next) => {
     // If keyword 'none' is used, do not include any Instrument attributes
     // If any other attributes are provided, only include those values
     // End result for the Band model:
-    /* {
-            include: [{
-                model: Band,
-                where: { name: req.query.bandName },
+    const { bandFields } = req.query;
 
-                // New to this step:
-                attributes: req.query.bandFields
-            }]
-        }
-    */
+    if (bandFields) {
+        const bandAttributes =
+            bandFields.includes("none") ? [] :
+            bandFields.includes("all") ? undefined : bandFields;
+
+        query.include.push({
+            model: Band,
+            attributes: bandAttributes,
+            where: bandName ? { name: bandName } : undefined // keep bandName filter if exists
+        })
+    }
+
+    const { instrumentFields } = req.query;
+
+    if (instrumentFields) {
+        const instrumentAttributes =
+            instrumentFields.includes("none") ? [] :
+            instrumentFields.includes("all") ? undefined : instrumentFields;
+
+            query.include.push({
+                model: Instrument,
+                attributes: instrumentAttributes,
+                where: instrumentTypes ? { type: instrumentTypes } : undefined,
+                through: { attributes: [] }
+            })
+    }
+
 
 
     // BONUS STEP 6: Order Options
     // ?order[]=XX,xx&order[]=YY&order[]=ZZ,zz
-    // Add a key to the query object that will order the results by the Musician 
+    // Add a key to the query object that will order the results by the Musician
     // attributes specified by the order query param, if it exists.
-    // If the order param does not exist, a default order of lastName, then 
+    // If the order param does not exist, a default order of lastName, then
     // firstName should be used.
     // The order param takes the form of an array of strings.
-    // The strings may include a `,` to separate the attribute from an 
-    // `ASC`/`DESC` indication. If the indicator is not present, it is assumed a 
+    // The strings may include a `,` to separate the attribute from an
+    // `ASC`/`DESC` indication. If the indicator is not present, it is assumed a
     // default `ASC` order and does not need to be included.
     // Example: ?order[]=firstName,asc&order[]=lastName&order[]=createdAt,desc
     // End result: { order: [['firstName', 'asc'], ['lastName'], ['createdAt', 'desc']] }
 
-    // Your code here
+    const { order } = req.query;
+
+    if (order) {
+        query.order = order.map(param => {
+            const [field, direction] = param.split(",");
+            return [field, direction || "ASC"];
+        })
+    } else {
+        query.order = [["lastName", "ASC"], ["firstName", "ASC"]];
+    }
 
 
     // Perform compiled query
@@ -137,5 +200,5 @@ app.get('/', (req, res) => {
 });
 
 // Set port and listen for incoming requests - DO NOT MODIFY
-const port = 5000;
+const port = 5001;
 app.listen(port, () => console.log('Server is listening on port', port));
